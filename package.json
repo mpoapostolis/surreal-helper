@@ -1,7 +1,7 @@
 {
   "name": "surreal-db-helper",
-  "version": "0.0.8-alpha.1",
-  "description": "none official helper for surrealdb  queries wip",
+  "version": "1.0.0-alpha.6",
+  "description": "Surrealdb typescript rest helper",
   "main": "dist/index.js",
   "types": "dist",
   "scripts": {
@@ -15,7 +15,9 @@
   },
   "keywords": [
     "surreal-db",
-    "surrealdb"
+    "surrealdb",
+    "surrealdb-rest",
+    "surreal-db-helper"
   ],
   "author": "mpoapostolis@gmail.com",
   "license": "MIT",

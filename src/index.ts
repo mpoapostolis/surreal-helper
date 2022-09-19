@@ -22,10 +22,36 @@ export type SurrealError = {
   msg: string;
 };
 
+function isEmpty(obj: Record<string, any>) {
+  return Object.keys(obj).length === 0;
+}
+
 function objToQuery(obj: any) {
   return Object.keys(obj)
-    .map((key) => `${key}=${encodeURIComponent(obj[key])}`)
+    .map((key) => `${key}='${obj[key]}'`)
     .join(", ");
+}
+
+async function f<T>(raw: string, conf: Conf) {
+  const headers = new Headers({
+    "Content-Type": "application/json",
+    ns: conf.ns,
+    db: conf.db,
+  });
+
+  headers.append("Content-Type", "application/json");
+  headers.append("ns", conf.ns);
+  headers.append("db", conf.db);
+  headers.append("Authorization", `Basic ${toBase64(conf.auth)}`);
+
+  const res = await fetch(conf.url, {
+    method: "POST",
+    headers: headers,
+    body: raw,
+  });
+
+  const data = (await res.json()) as SurrealType<T>;
+  return data;
 }
 
 export class Surreal {
@@ -35,25 +61,8 @@ export class Surreal {
     this.conf = obj;
   }
 
-  private async f<T>(q: string) {
-    const headers = new Headers({
-      "Content-Type": "application/json",
-      ns: this.conf.ns,
-      db: this.conf.db,
-      Authorization: "Basic " + toBase64(this.conf.auth),
-    });
-
-    const res = await fetch(this.conf.url, {
-      body: q,
-      method: "POST",
-      headers,
-    });
-    const data = (await res.json()) as SurrealType<T>;
-    return data;
-  }
-
-  async query<T>(q: string) {
-    return await this.f<T>(q);
+  async rawQuery<T>(q: string) {
+    return await f<T>(q, this.conf);
   }
 
   select<T>(selections: string[] | "*") {
@@ -62,8 +71,10 @@ export class Surreal {
         return {
           where: async (obj: Record<string, any> = {}) => {
             const selected = selections === "*" ? "*" : selections.join(", ");
-            return await this.f<T>(
-              `SELECT ${selected}  FROM ${table} WHERE ${objToQuery(obj)}`
+            const where = isEmpty(obj) ? "" : `WHERE ${objToQuery(obj)}`;
+            return await f<T>(
+              `SELECT ${selected}  FROM ${table} ${where}`,
+              this.conf
             );
           },
         };
@@ -74,25 +85,26 @@ export class Surreal {
   create<T = unknown>(table: string): Record<string, any> {
     return {
       set: async (obj: Record<string, any> = {}) => {
-        const set = Object.keys(obj)
-          .map((k) => `${k} = ${obj[k]}`)
-          .join(", ");
-        return await this.f<T>(`CREATE ${table} SET ${set}`);
+        const set = isEmpty(obj) ? "" : "SET " + objToQuery(obj);
+        return await f<T>(`CREATE ${table} ${set}`, this.conf);
       },
     };
   }
 
   update<T = unknown>(table: string): Record<string, any> {
+    let where = "";
     return {
+      set: async (setObj: Record<string, any> = {}) => {
+        const set = isEmpty(setObj) ? "" : "SET " + objToQuery(setObj);
+        return await f<T>(`UPDATE ${table} ${set}`, this.conf);
+      },
+
       where: (whereObj: Record<string, any> = {}) => {
+        where = isEmpty(whereObj) ? "" : `WHERE ${objToQuery(whereObj)}`;
         return {
-          set: async (obj: Record<string, any> = {}) => {
-            const set = Object.keys(obj)
-              .map((k) => `${k} = ${obj[k]}`)
-              .join(", ");
-            return await this.f<T>(
-              `UPDATE ${table} WHERE ${objToQuery(whereObj)} SET ${set}`
-            );
+          set: async (setObj: Record<string, any> = {}) => {
+            const set = isEmpty(setObj) ? "" : "SET " + objToQuery(setObj);
+            return await f<T>(`UPDATE ${table} ${where} ${set}`, this.conf);
           },
         };
       },
@@ -102,9 +114,8 @@ export class Surreal {
   delete<T = unknown>(table: string): Record<string, any> {
     return {
       where: async (whereObj: Record<string, any> = {}) => {
-        return await this.f<T>(
-          `DELETE ${table} WHERE ${objToQuery(whereObj)} `
-        );
+        const where = isEmpty(whereObj) ? "" : `WHERE ${objToQuery(whereObj)}`;
+        return await f<T>(`DELETE ${table} ${where}`, this.conf);
       },
     };
   }
@@ -122,14 +133,9 @@ export const ops = {
   }),
 };
 
-const surreal = new Surreal({
-  url: "http://localhost:8080/query",
+export const surreal = new Surreal({
+  url: "http://localhost:8000/sql",
   ns: "default",
   db: "default",
   auth: "root:root",
 });
-
-surreal
-  .create("users:mpoapostolis")
-  .set({ name: "mpoapostolis", age: 30 })
-  .then(console.log);
