@@ -2,11 +2,11 @@
 ```js
 
 // (url: string, ns: string, db: string, auth?: string)
-const surr = new Surreal({
-  url:"http://localhost:8000/sql",
-  ns:"ns",
-  db:"db",
-  auth: "Basic ___" // optional
+const surreal = new Surreal({
+  url: "http://localhost:8000/sql",
+  ns: "mpoapostolis",
+  db: "account",
+  auth: "root:root",
 });
 
 const accounts = await surr.select(`SELECT * FROM accounts`)
